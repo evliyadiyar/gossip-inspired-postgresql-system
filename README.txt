@@ -1,62 +1,51 @@
-📌 Project Summary
-This simulation demonstrates how a gossip-inspired decision mechanism can dynamically redirect incoming data inserts across multiple PostgreSQL databases, mimicking a realistic disaster recovery scenario.
-The system consists of:
+# 🛰️ Gossip-Based Disaster Recovery Simulation
 
-1 production database (gsp_prod)
+This project simulates a **gossip-inspired decision mechanism** for dynamically redirecting data inserts across multiple PostgreSQL databases.
 
-3 disaster recovery nodes (gsp_1, gsp_2, gsp_3)
+The goal is to mimic a realistic **disaster recovery scenario** with lightweight, decentralized load balancing and failover behavior.
 
-A gossip agent that monitors the system and controls data routing
+## System Components
 
-A data simulator that inserts fake sensor data
+- 🛠️ 1 production database: `gsp_prod`  
+- 💾 3 disaster recovery nodes: `gsp_1`, `gsp_2`, `gsp_3`  
+- 🗣️ Gossip agent: monitors node load and routes inserts  
+- 🧪 Data simulator: sends fake sensor data to the active database
 
-⚙️ Requirements
-PostgreSQL 12+ (already pre-installed in GitHub Codespaces)
+## ⚙️ Requirements
 
-Python 3.7+
+- PostgreSQL 12 or higher (pre-installed in GitHub Codespaces)
+- Python 3.7 or higher
+- Python packages:
+  ```bash
+  pip install psycopg2
 
-psycopg2: install with:
+## 📦 Setup (First-time only)
 
-bash
-Copy
-Edit
-pip install psycopg2
-📦 Setup (First-time only)
-1. Start PostgreSQL (if not already running)
-bash
-Copy
-Edit
-sudo service postgresql start
-2. Create required databases
-sql
-Copy
-Edit
--- From any terminal:
+### 1. Start PostgreSQL
+
+If PostgreSQL is not already running, start the service:
+
+  ```bash
+  sudo service postgresql start
+  ```
+
+  
+### 2. Create Required Databases
+
+Enter the PostgreSQL shell:
+
+
+```bash
 sudo -u postgres psql
 
--- Then in PostgreSQL shell:
 CREATE DATABASE gsp_prod;
 CREATE DATABASE gsp_1;
 CREATE DATABASE gsp_2;
 CREATE DATABASE gsp_3;
-\q
-3. Apply schema to all databases (run once for each)
-Each DB should contain:
+```
+Each database should include:
 
-A table: sensor_data(sensor_id INT, value FLOAT, created_at TIMESTAMP)
-
-A table: node_state(node_id TEXT PRIMARY KEY, load_percent FLOAT, last_updated TIMESTAMP)
-
-Use this inside each DB (change DB name in the connection):
-
-bash
-Copy
-Edit
-psql -U postgres -d gsp_prod -h localhost
--- or gsp_1, gsp_2, gsp_3
-sql
-Copy
-Edit
+```bash
 CREATE TABLE sensor_data (
     sensor_id INT,
     value FLOAT,
@@ -69,72 +58,49 @@ CREATE TABLE node_state (
     last_updated TIMESTAMP
 );
 
--- Insert initial node ID
-INSERT INTO node_state VALUES ('prod', 0, CURRENT_TIMESTAMP);  -- for gsp_prod
--- Use 'dr1', 'dr2', 'dr3' for others respectively
-Repeat this setup for each database (with matching node_id values).
+```
 
-▶️ How to Run the Project
-1. Set initial insert target
-bash
-Copy
-Edit
+### 3. Insert initial node_state for each DB
+
+For gsp_prod:
+```
+INSERT INTO node_state VALUES ('prod', 0, CURRENT_TIMESTAMP);
+```
+For gsp_1, gsp_2, gsp_3:
+```
+INSERT INTO node_state VALUES ('dr1', 0, CURRENT_TIMESTAMP);  -- gsp_1
+INSERT INTO node_state VALUES ('dr2', 0, CURRENT_TIMESTAMP);  -- gsp_2
+INSERT INTO node_state VALUES ('dr3', 0, CURRENT_TIMESTAMP);  -- gsp_3
+```
+
+## ▶️ How to Run the Project
+
+### 1. Set the Initial Insert Target
+
+```bash
 echo "gsp_prod" > active_target.txt
-2. Run the gossip agent (monitor and decision logic)
-Keep this running in one terminal tab
+```
 
-bash
-Copy
-Edit
+### 2. Run the Gossip Agent
+Start the gossip agent in one terminal. It monitors all databases and updates active_target.txt if the current target becomes overloaded (>80%).
+
+```
 python gossip_agent.py
-This script checks all databases every second, evaluates current loads, and updates active_target.txt if the current write target exceeds 80% load.
+```
+Checks node states every second and redirects future inserts if needed.
 
-3. Run the data simulator
-In a separate terminal tab
+### 3. Run the Data Simulator
+In another terminal, start simulating sensor data inserts:
 
-bash
-Copy
-Edit
+```
 python simulate_data.py
-This script inserts random sensor data into the current active database, as defined in active_target.txt, every 2 seconds.
-Each DB can hold up to 10 rows (100% load), simulating capacity constraints.
+```
+Sends fake sensor data every 2 seconds to the database listed in active_target.txt.
 
-🔁 Optional: Reset for New Run
-If you want to reset the simulation:
+### 🔁 Optional: Reset for New Run
+To clear all sensor data from all databases:
 
-bash
-Copy
-Edit
+```
 python clear_data.py
-This will clear sensor_data from all databases.
-
-💡 Notes
-Insert direction will not change unless the current target exceeds 80% load
-
-Targets are only redirected to nodes under 20% load
-
-No data is moved or migrated — this is a write redirection mechanism only
-
-Gossip agent behaves reactively — no centralized control beyond monitoring
-
-🧪 Sample Output
-bash
-Copy
-Edit
-[2025-04-13 23:12:01] Checking node states...
-PROD Load: 90.0%
-DR1 Load: 10.0%
-DR2 Load: 0.0%
- → Current target DR1 is stable (10.0%). No change.
-
-[2025-04-13 23:12:12] Checking node states...
-DR1 Load: 80.0%
- → Current target DR1 is stable (80.0%). No change.
-
-[2025-04-13 23:12:14] Checking node states...
-DR1 Load: 100.0%
-[GOSSIP] dr1 is overloaded (100.0%).
- → Redirecting future inserts to: DR2 (gsp_2)
-Enjoy exploring decentralized write routing!
-This setup mimics real-world load distribution decisions using a gossip-style adaptive strategy.
+```
 
